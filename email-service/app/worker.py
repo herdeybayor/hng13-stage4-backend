@@ -23,8 +23,8 @@ class EmailWorker:
         self.connection = await aio_pika.connect_robust(settings.RABBITMQ_URL)
         self.channel = await self.connection.channel()
         await self.channel.set_qos(prefetch_count=settings.WORKER_PREFETCH_COUNT)
-        self.queue = await self.channel.declare_queue("email.queue", durable=True)
-        self.dlq = await self.channel.declare_queue("failed.queue", durable=True)
+        self.queue = await self.channel.get_queue("email.queue")
+        self.dlq = await self.channel.get_queue("failed.queue")
     
     async def send_email(self, to_email: str, subject: str, html_content: str):
         message = MIMEMultipart("alternative")

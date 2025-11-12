@@ -22,8 +22,8 @@ class PushWorker:
         self.connection = await aio_pika.connect_robust(settings.RABBITMQ_URL)
         self.channel = await self.connection.channel()
         await self.channel.set_qos(prefetch_count=settings.WORKER_PREFETCH_COUNT)
-        self.queue = await self.channel.declare_queue("push.queue", durable=True)
-        self.dlq = await self.channel.declare_queue("failed.queue", durable=True)
+        self.queue = await self.channel.get_queue("push.queue")
+        self.dlq = await self.channel.get_queue("failed.queue")
     
     async def send_push_notification(self, token: str, title: str, body_text: str, data: dict):
         if not settings.FCM_API_KEY:
