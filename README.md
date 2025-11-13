@@ -2,64 +2,104 @@
 
 A scalable microservices-based notification system built with Python, FastAPI, and RabbitMQ for Stage 4 Backend Task.
 
+> **🎯 New here?** Start with **[START_HERE.md](START_HERE.md)** for a 3-step quickstart!
+
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- Python 3.11+
 - Docker & Docker Compose
-- PostgreSQL 15+
-- Redis 7+
-- RabbitMQ 3+
+- Make (usually pre-installed on macOS/Linux)
 
-### Installation
+### ⚡ Fastest Setup (Recommended)
 
-1. **Clone the repository**
+**One command deployment with automatic migrations:**
 
 ```bash
-git clone <your-repo-url>
-cd hng13-stage4-backend
+make deploy
 ```
 
-2. **Set up environment variables**
+That's it! This automatically:
 
-```bash
-cp .env.example .env
-# Edit .env with your credentials
-```
+- ✅ Sets up environment
+- ✅ Builds all images
+- ✅ Starts all services
+- ✅ Runs database migrations automatically
+- ✅ Verifies everything works
 
-3. **Start infrastructure services**
-
-```bash
-docker-compose up -d postgres redis rabbitmq
-```
-
-4. **Run database migrations**
-
-```bash
-cd user-service
-alembic upgrade head
-
-cd ../template-service
-alembic upgrade head
-```
-
-5. **Start all services**
-
-```bash
-docker-compose up -d
-```
-
-6. **Access the services**
+**Access your services:**
 
 - API Gateway: http://localhost:8000/docs
 - User Service: http://localhost:8001/docs
 - Template Service: http://localhost:8002/docs
-- RabbitMQ Management: http://localhost:15672 (admin/admin123)
+- RabbitMQ UI: http://localhost:15672 (admin/admin123)
+
+📖 **See [QUICKSTART.md](QUICKSTART.md) for the 3-command setup**  
+📖 **See [DEPLOYMENT.md](DEPLOYMENT.md) for complete deployment guide**
+
+### 🔧 Manual Setup (Alternative)
+
+If you prefer manual control:
+
+1. **Clone and configure**
+
+```bash
+git clone <your-repo-url>
+cd hng13-stage4-backend
+
+# Create .env file (see .env.example for template)
+cat > .env << EOF
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/notifications
+SECRET_KEY=your-secret-key-change-this
+# ... other variables
+EOF
+```
+
+2. **Deploy with Make**
+
+```bash
+make first-run
+```
+
+Or step by step:
+
+```bash
+make setup   # Create .env and directories
+make build   # Build Docker images
+make start   # Start services (migrations run automatically!)
+```
+
+### 📊 Verify Deployment
+
+```bash
+make health  # Check all services are healthy
+make status  # View running containers
+make logs    # View all logs
+```
+
+---
+
+## 🎯 Key Features
+
+- **Automatic Migrations**: Database migrations run automatically on startup
+- **Hot Reload**: Code changes reload automatically in development
+- **Health Checks**: Built-in health monitoring for all services
+- **Scalable Workers**: Easy horizontal scaling for email/push workers
+- **One-Command Deployment**: Full stack deployment with `make deploy`
 
 ---
 
 ## 📚 Documentation
+
+### Getting Started
+
+- **[QUICKSTART.md](./QUICKSTART.md)** - 3-command quick start guide ⚡
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Complete automated deployment guide
+- **[CHEATSHEET.md](./CHEATSHEET.md)** - Command reference & quick tips 📋
+- **[ALEMBIC_SETUP_GUIDE.md](./ALEMBIC_SETUP_GUIDE.md)** - Database migrations deep-dive
+- **[AUTOMATION_SUMMARY.md](./AUTOMATION_SUMMARY.md)** - What's automated and why
+
+### Architecture & Implementation
 
 - **[IMPLEMENTATION_GUIDE.md](./IMPLEMENTATION_GUIDE.md)** - Complete implementation guide with code examples
 - **[SYSTEM_DESIGN.md](./SYSTEM_DESIGN.md)** - System architecture diagrams and design decisions
