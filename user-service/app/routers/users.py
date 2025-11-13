@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from passlib.context import CryptContext
+import bcrypt
 from uuid import UUID
 
 from app.database import get_db
@@ -13,8 +13,17 @@ from app.schemas.user_schema import (
 )
 from app.repositories.user_repository import UserRepository
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 router = APIRouter()
+
+
+def hash_password(password: str) -> str:
+    """Hash a password using bcrypt"""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a password against a hash"""
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
 
 @router.post(
@@ -38,7 +47,7 @@ async def create_user(
         )
     
     # Hash password
-    password_hash = pwd_context.hash(user_data.password)
+    password_hash = hash_password(user_data.password)
     
     # Create user
     user = await user_repo.create(

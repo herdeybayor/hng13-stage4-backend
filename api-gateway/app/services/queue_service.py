@@ -31,10 +31,31 @@ class QueueService:
                 durable=True
             )
             
-            # Declare queues
-            await self.channel.declare_queue("email.queue", durable=True)
-            await self.channel.declare_queue("push.queue", durable=True)
-            await self.channel.declare_queue("failed.queue", durable=True)
+            # Declare queues with matching arguments as workers
+            email_queue = await self.channel.declare_queue(
+                "email.queue",
+                durable=True,
+                arguments={
+                    "x-max-priority": 10,
+                    "x-message-ttl": 86400000,
+                    "x-max-length": 100000
+                }
+            )
+            push_queue = await self.channel.declare_queue(
+                "push.queue",
+                durable=True,
+                arguments={
+                    "x-max-priority": 10,
+                    "x-message-ttl": 86400000,
+                    "x-max-length": 100000
+                }
+            )
+            failed_queue = await self.channel.declare_queue("failed.queue", durable=True)
+            
+            # Bind queues to exchange
+            await email_queue.bind(self.exchange, routing_key="email.queue")
+            await push_queue.bind(self.exchange, routing_key="push.queue")
+            await failed_queue.bind(self.exchange, routing_key="failed.queue")
             
         return self.channel
     
@@ -57,7 +78,7 @@ class QueueService:
         
         message_body = {
             "notification_id": notification_id,
-            "notification_type": notification_request.notification_type,
+            "notification_type": notification_request.notification_type.value,
             "user_id": str(notification_request.user_id),
             "user_email": user_data.get("email"),
             "user_push_token": user_data.get("push_token"),
@@ -72,7 +93,7 @@ class QueueService:
         }
         
         # Determine routing key based on notification type
-        routing_key = f"{notification_request.notification_type}.queue"
+        routing_key = f"{notification_request.notification_type.value}.queue"
         
         message = aio_pika.Message(
             body=json.dumps(message_body).encode(),

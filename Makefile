@@ -107,17 +107,33 @@ logs-rabbitmq: ## Show RabbitMQ logs
 # DATABASE OPERATIONS
 # ==============================================================================
 
+db-create-migrations: ## Create initial migrations (run once)
+	@echo "$(BLUE)Creating initial migrations...$(NC)"
+	@chmod +x scripts/create-initial-migrations.sh
+	@./scripts/create-initial-migrations.sh
+	@echo "$(GREEN)✓ Migrations created$(NC)"
+
 db-migrate: ## Run database migrations
 	@echo "$(BLUE)Running migrations...$(NC)"
 	docker-compose exec user-service alembic upgrade head
 	docker-compose exec template-service alembic upgrade head
 	@echo "$(GREEN)✓ Migrations complete$(NC)"
 
+db-migrate-auto: ## Auto-migrate on startup (already handled by entrypoint)
+	@echo "$(GREEN)✓ Migrations run automatically on service startup$(NC)"
+
 db-rollback: ## Rollback last migration
 	@echo "$(BLUE)Rolling back migration...$(NC)"
 	docker-compose exec user-service alembic downgrade -1
 	docker-compose exec template-service alembic downgrade -1
 	@echo "$(GREEN)✓ Rollback complete$(NC)"
+
+db-status: ## Show current migration status
+	@echo "$(BLUE)User Service Migration Status:$(NC)"
+	@docker-compose exec user-service alembic current
+	@echo ""
+	@echo "$(BLUE)Template Service Migration Status:$(NC)"
+	@docker-compose exec template-service alembic current
 
 db-reset: ## Reset database (WARNING: destroys all data)
 	@echo "$(RED)⚠ This will destroy all data!$(NC)"
@@ -311,11 +327,24 @@ restore: ## Restore database from backup (usage: make restore file=backups/backu
 # QUICK COMMANDS
 # ==============================================================================
 
-all: clean build start db-migrate ## Complete rebuild (clean, build, start, migrate)
+all: clean build start ## Complete rebuild (clean, build, start) - migrations run automatically
 	@echo "$(GREEN)✓ Complete rebuild finished$(NC)"
 
 quick: ## Quick start for development
 	@make setup
 	@make start
 	@echo "$(GREEN)✓ Quick start complete$(NC)"
+
+deploy: ## Complete automated deployment (recommended for first-time setup)
+	@echo "$(BLUE)Running automated deployment...$(NC)"
+	@chmod +x scripts/setup-deployment.sh
+	@./scripts/setup-deployment.sh
+
+first-run: setup deploy ## Complete first-time setup and deployment
+	@echo "$(GREEN)✓ First run complete!$(NC)"
+
+init-local: ## Initialize migrations locally (without Docker)
+	@echo "$(BLUE)Initializing migrations locally...$(NC)"
+	@chmod +x scripts/init-migrations-local.sh
+	@./scripts/init-migrations-local.sh
 

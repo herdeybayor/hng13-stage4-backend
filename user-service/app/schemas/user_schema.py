@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import Optional, Any
 from uuid import UUID
 from datetime import datetime
 
@@ -54,7 +54,7 @@ class UserResponse(BaseModel):
 class ApiResponse(BaseModel):
     success: bool
     message: str
-    data: Optional[dict] = None
+    data: Optional[Any] = None
     error: Optional[str] = None
     meta: Optional[dict] = None
 
