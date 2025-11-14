@@ -5,6 +5,8 @@ import logging
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import httpx
+from datetime import datetime
 
 from app.config import settings
 from app.services.circuit_breaker import CircuitBreaker
@@ -18,6 +20,7 @@ class EmailWorker:
         self.circuit_breaker = CircuitBreaker()
         self.connection = None
         self.channel = None
+        self.api_gateway_url = settings.API_GATEWAY_URL
     
     async def connect(self):
         self.connection = await aio_pika.connect_robust(settings.RABBITMQ_URL)
@@ -54,6 +57,62 @@ class EmailWorker:
         
         logger.info(f"Email sent successfully to {to_email}")
     
+    async def fetch_and_render_template(self, template_code: str, variables: dict) -> tuple:
+        """Fetch template from template service and render with variables"""
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{settings.TEMPLATE_SERVICE_URL}/api/v1/templates/{template_code}",
+                    timeout=5.0
+                )
+                
+                if response.status_code == 200:
+                    template_data = response.json()
+                    template = template_data.get("data", {})
+                    
+                    # Get subject from variables or use template name
+                    subject = variables.get("subject", template.get("name", "Notification"))
+                    
+                    # Get HTML content from template
+                    html_content = template.get("content", "<p>Notification</p>")
+                    
+                    # Replace variables in subject and content using {{variable}} syntax
+                    for key, value in variables.items():
+                        subject = subject.replace(f"{{{{{key}}}}}", str(value))
+                        html_content = html_content.replace(f"{{{{{key}}}}}", str(value))
+                    
+                    return subject, html_content
+                else:
+                    logger.warning(f"Template not found: {template_code}, using default")
+                    return variables.get("subject", "Notification"), f"<html><body><h1>{variables.get('subject', 'Notification')}</h1><p>{variables.get('message', '')}</p></body></html>"
+        except Exception as e:
+            logger.error(f"Error fetching template: {e}")
+            return variables.get("subject", "Notification"), f"<html><body><h1>{variables.get('subject', 'Notification')}</h1><p>{variables.get('message', '')}</p></body></html>"
+    
+    async def update_status(self, notification_id: str, status: str, error_message: str = None):
+        """Update notification status via API Gateway"""
+        try:
+            async with httpx.AsyncClient() as client:
+                payload = {
+                    "status": status,
+                    "delivered_at": datetime.utcnow().isoformat() if status == "delivered" else None,
+                    "error_message": error_message,
+                    "metadata": {"worker_type": "email"}
+                }
+                
+                response = await client.post(
+                    f"{self.api_gateway_url}/api/v1/email/status/?notification_id={notification_id}",
+                    json=payload,
+                    timeout=5.0
+                )
+                
+                if response.status_code == 200:
+                    logger.info(f"Updated status for {notification_id} to {status}")
+                else:
+                    logger.warning(f"Failed to update status: {response.status_code}")
+        except Exception as e:
+            logger.error(f"Error updating status: {e}")
+    
     async def process_message(self, message: aio_pika.IncomingMessage):
         async with message.process():
             try:
@@ -61,24 +120,31 @@ class EmailWorker:
                 notification_id = body.get("notification_id")
                 logger.info(f"Processing notification {notification_id}")
                 
+                # Update status to processing
+                await self.update_status(notification_id, "processing")
+                
                 if not self.circuit_breaker.can_proceed():
                     logger.warning("Circuit breaker OPEN, requeueing")
                     await message.reject(requeue=True)
                     await asyncio.sleep(5)
                     return
                 
-                # Simple template rendering
+                # Fetch and render template
+                template_code = body.get("template_code")
                 variables = body.get("variables", {})
-                html_content = f"<html><body><h1>Notification</h1><p>{json.dumps(variables)}</p></body></html>"
+                
+                subject, html_content = await self.fetch_and_render_template(template_code, variables)
                 
                 await self.send_email(
                     to_email=body.get("user_email"),
-                    subject=variables.get("subject", "Notification"),
+                    subject=subject,
                     html_content=html_content
                 )
                 
                 self.circuit_breaker.record_success()
                 logger.info(f"Successfully sent email for {notification_id}")
+                
+                await self.update_status(notification_id, "delivered")
                 
             except Exception as e:
                 logger.error(f"Error processing message: {e}", exc_info=True)
@@ -87,6 +153,7 @@ class EmailWorker:
                 retry_count = body.get("retry_count", 0)
                 if retry_count >= settings.MAX_RETRIES:
                     logger.error(f"Max retries exceeded for {notification_id}, moving to DLQ")
+                    await self.update_status(notification_id, "failed", str(e))
                     await self.move_to_dlq(body)
                 else:
                     body["retry_count"] = retry_count + 1
